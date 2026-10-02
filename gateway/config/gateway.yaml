@@ -1,0 +1,95 @@
+# Gateway config. Edit in place: the gateway re-reads this file within 2 s of a save (no restart). A file that does
+# not load (bad YAML, unknown field) is ignored and the last good one stays in use; GET /gateway/status shows the error.
+#
+# Money is in US dollars. Prices are per million tokens.
+#
+# How a request is placed: every backend that can take it gets a score, the estimated cost of sending it there, and
+# the lowest wins. The score adds up:
+#   - price:   the tokens the backend would charge for. Tokens it already holds in its prompt cache (from this
+#              session's earlier turns) are charged at its cached price; the rest are prefilled (processed) anew.
+#   - load:    for backends with limited capacity (our GPUs, a contract's rate cap), what the extra work costs in
+#              capacity: the GPU-seconds (or contract Tokens) it uses, times their price, times a factor that is 0
+#              while the backend is less than routing.congestion_starts_at full and then rises steeply
+#              ((u - start) / (1 - u), u = how full it is). So traffic spills over as a backend fills, and comes back
+#              when it empties. Sessions cached nowhere spill first: moving them re-prefills nothing.
+#   - latency: expected seconds to the first token, times routing.latency_dollars_per_s.
+#   - penalty: a fixed amount per request (e.g. for a backend that fails more often).
+# A session (one conversation) stays where it is unless another backend is cheaper by more than switch_margin.
+
+models:
+  qwen3.8-27b:                       # the name clients may use, and other names that mean the same model
+    aliases: [Qwen/Qwen3.8-27B, qwen-3.8-27b, alibaba/qwen3.8-27b, qwen/qwen3.8-27b]
+    default_output_tokens: 1500      # expected output of a request before the client has history
+
+routing:
+  latency_dollars_per_s: 0.0002      # what one second less to the first token is worth
+  congestion_starts_at: 0.5          # below this fill (0-1), extra work on a backend costs nothing
+  switch_margin_dollars: 0.0005      # a session moves only when another backend is cheaper by this much
+  switch_margin_fraction: 0.1        # ... or by this fraction of its score, whichever is larger
+  max_wait_s: 600                    # a request that no backend took waits this long before a 503
+  session_ttl_s: 7200                # sessions not seen for this long are forgotten
+
+backends:
+  # Our GPU nodes, through SMG (Shepherd Model Gateway) on this machine, which spreads requests over the nodes by
+  # prompt-cache overlap and load. Nodes are Runpod pods whose env GATEWAY_POOL is `runpod_pool` (port 8000/tcp),
+  # plus any `workers` listed here.
+  gpu:
+    kind: pool
+    url: http://127.0.0.1:30000/v1   # SMG
+    api_key_env: VLLM_API_KEY        # the nodes' vLLM key
+    runpod_pool: qwen3.8-27b
+    workers: []                      # extra node URLs, e.g. http://1.2.3.4:12345
+    models: {qwen3.8-27b: Qwen/Qwen3.8-27B}
+    max_context: 600000
+    cache_ttl_s: 1800                # the nodes keep cache in CPU memory (DRAM offload) too: long
+    capacity:
+      dollars_per_hour: 18.36        # per node: what an hour of a fully busy node costs
+      max_running: 160               # vLLM --max-num-seqs
+      prefill_tokens_per_s: 20000    # per node, starting guess; raised from /metrics when it does better
+      ttft_target_s: 3               # queued prefill beyond this many seconds counts as full
+      decode_tokens_per_s_min: 30    # per stream; slower than this counts as full
+
+  # Touchmark contracts. Every model the key lists on /v1/models becomes its own backend (named touchmark/<model>), and
+  # disappears when the key stops listing it. Touchmark's API does not give a contract's terms, so they are here, by
+  # Touchmark model id.
+  touchmark:
+    kind: touchmark
+    url: https://router.touchmark.ai/v1
+    api_key_env: TOUCHMARK_API_KEY
+    max_context: 1000000
+    cache_ttl_s: 300
+    contracts:
+      qwen-3.8-27b:                  # the October block: 1B Tokens, sold by OpenRelay
+        prepaid: true                # already paid: a request costs nothing extra while the rate cap has room
+        token_price: 1.5             # dollars per million Tokens: the worth of capacity as the rate cap fills
+        weights: {output: 1, input: 0.02, cached: 0.02}   # Tokens per output, input and cached input token
+        tokens_per_minute: 2000000   # the rate cap, in Tokens
+        expires: 2026-11-01T00:00:00Z
+        ttft_s: 1.2                  # starting guess of time to first token; measured after
+
+  # Vercel AI Gateway: no capacity limit, pay per token, less reliable.
+  vercel:
+    kind: openai
+    adapter: vercel
+    url: https://ai-gateway.vercel.sh/v1
+    api_key_env: AI_GATEWAY_API_KEY
+    models: {qwen3.8-27b: alibaba/qwen3.8-27b}
+    extra_body:                      # serve only from providers with the full 1M context in BF16
+      providerOptions: {gateway: {only: [alibaba, novita], caching: auto}}
+    prices: {input: 0.5, cached: 0.1, output: 3.0}
+    max_context: 1000000
+    cache_ttl_s: 300
+    ttft_s: 1.0
+    penalty_dollars: 0.001
+
+  # A provider paid by the hour, on during set hours (example, off):
+  # hourly-example:
+  #   kind: openai
+  #   enabled: false
+  #   url: https://example.com/v1
+  #   api_key_env: EXAMPLE_API_KEY
+  #   models: {qwen3.8-27b: qwen3.8-27b}
+  #   prepaid: true
+  #   active_hours_utc: [8, 20]      # on from 08:00 to 20:00 UTC
+  #   max_inflight: 64               # its concurrency limit
+  #   max_context: 600000
