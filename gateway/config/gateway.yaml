@@ -67,20 +67,21 @@ backends:
         expires: 2026-11-01T00:00:00Z
         ttft_s: 1.2                  # starting guess of time to first token; measured after
 
-  # Vercel AI Gateway: no capacity limit, pay per token, less reliable.
-  vercel:
-    kind: openai
-    adapter: vercel
-    url: https://ai-gateway.vercel.sh/v1
-    api_key_env: AI_GATEWAY_API_KEY
-    models: {qwen3.8-27b: alibaba/qwen3.8-27b}
-    extra_body:                      # serve only from providers with the full 1M context in BF16
-      providerOptions: {gateway: {only: [alibaba, novita], caching: auto}}
-    prices: {input: 0.5, cached: 0.1, output: 3.0}
-    max_context: 1000000
-    cache_ttl_s: 300
-    ttft_s: 1.0
-    penalty_dollars: 0.001
+  # Vercel AI Gateway: no capacity limit, pay per token, less reliable. Off for now (Touchmark is the fallback);
+  # to turn it on, remove the leading "# " from these lines.
+  # vercel:
+  #   kind: openai
+  #   adapter: vercel
+  #   url: https://ai-gateway.vercel.sh/v1
+  #   api_key_env: AI_GATEWAY_API_KEY
+  #   models: {qwen3.8-27b: alibaba/qwen3.8-27b}
+  #   extra_body:                      # serve only from providers with the full 1M context in BF16
+  #     providerOptions: {gateway: {only: [alibaba, novita], caching: auto}}
+  #   prices: {input: 0.5, cached: 0.1, output: 3.0}
+  #   max_context: 1000000
+  #   cache_ttl_s: 300
+  #   ttft_s: 1.0
+  #   penalty_dollars: 0.001
 
   # A provider paid by the hour, on during set hours (example, off):
   # hourly-example:

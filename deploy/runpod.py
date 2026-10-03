@@ -22,7 +22,7 @@ API = "https://api.runpod.io/v2"
 ROOT = Path(__file__).resolve().parent.parent
 
 NODE_IMAGE = "vllm/vllm-openai:nightly-ac9126e58aa7bbab1856ba6593ba4d5003fea516"  # the first node's vLLM build
-GATEWAY_IMAGE = os.environ.get("GATEWAY_IMAGE", "412341941636.dkr.ecr.us-east-1.amazonaws.com/model-gateway:20261002-2119")
+GATEWAY_IMAGE = os.environ.get("GATEWAY_IMAGE", "412341941636.dkr.ecr.us-east-1.amazonaws.com/model-gateway:20261003-2156")
 GATEWAY_DC = "US-CA-2"   # CPU pods, network volumes, and H200s to put nodes next to it
 
 

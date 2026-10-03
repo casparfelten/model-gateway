@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from mgw.config import contract, parse
+from mgw.config import backend, contract, parse
 from mgw.score import Ask, rank
 from mgw.state import Node, State
 
@@ -14,7 +14,10 @@ NOW = time.time()
 
 
 def backends():
-    gpu, vercel, tm = CONFIG.backends["gpu"], CONFIG.backends["vercel"], CONFIG.backends["touchmark"]
+    gpu, tm = CONFIG.backends["gpu"], CONFIG.backends["touchmark"]
+    vercel = backend("vercel", {"kind": "openai", "adapter": "vercel", "url": "https://ai-gateway.vercel.sh/v1",
+                                "models": {"qwen3.8-27b": "alibaba/qwen3.8-27b"}, "max_context": 1000000,
+                                "prices": {"input": 0.5, "cached": 0.1, "output": 3.0}, "penalty_dollars": 0.001})
     block = contract(tm, "qwen-3.8-27b", tm.contracts["qwen-3.8-27b"])
     block.models = {"qwen3.8-27b": "qwen-3.8-27b"}
     return {"gpu": gpu, block.name: block, "vercel": vercel}
