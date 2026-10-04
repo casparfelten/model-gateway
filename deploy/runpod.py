@@ -33,6 +33,12 @@ def script_cmd(path: Path) -> dict:
             "cmd": [f"cat > /start.sh <<'START_EOF'\n{path.read_text()}\nSTART_EOF\nexec bash /start.sh"]}
 
 
+def bench_cmd() -> dict:
+    script = (ROOT / "bench" / "pod_start.sh").read_text().replace("__CTL_PY__", (ROOT / "bench" / "ctl.py").read_text())
+    return {"entrypoint": ["bash", "-c"],
+            "cmd": [f"cat > /start.sh <<'START_EOF'\n{script}\nSTART_EOF\nexec bash /start.sh"]}
+
+
 TEMPLATES = {
     "node": {
         "name": "qwen3.8-27b-node",
@@ -48,6 +54,22 @@ TEMPLATES = {
             "VLLM_ENGINE_READY_TIMEOUT_S": "3600",
             "VLLM_CACHE_ROOT": "/workspace/.vllm_cache",
             "HF_XET_HIGH_PERFORMANCE": "1",
+        },
+        "startSsh": True,
+        "startJupyter": False,
+    },
+    "bench": {   # benchmark pods: vLLM image, nothing started; driven through bench/ctl.py on 8888 (HTTPS proxy)
+        "name": "qwen-bench-node",
+        "image": NODE_IMAGE,
+        **bench_cmd(),
+        "ports": ["8000/tcp", "8888/http", "22/tcp"],
+        "disk": 50,
+        "mounts": {"persistent": {"size": 600, "path": "/workspace"}},
+        "env": {
+            "VLLM_API_KEY": "{{ RUNPOD_SECRET_vllm_api_key }}",
+            "CTL_TOKEN": "{{ RUNPOD_SECRET_ctl_token }}",
+            "HF_XET_HIGH_PERFORMANCE": "1",
+            "VLLM_CACHE_ROOT": "/workspace/.vllm_cache",
         },
         "startSsh": True,
         "startJupyter": False,
@@ -72,6 +94,7 @@ TEMPLATES = {
 
 PODS = {
     "node": {"gpu": {"id": "NVIDIA H200", "count": 4}, "cloud": "SECURE"},
+    "bench": {"gpu": {"id": "NVIDIA H200", "count": 4}, "cloud": "SECURE"},
     "gateway": {"cpu": {"id": "cpu3c", "vcpuCount": 4}, "cloud": "SECURE", "dataCenterIds": [GATEWAY_DC]},
 }
 
@@ -125,7 +148,7 @@ def pod(kind: str, name: str, extra: str = "") -> None:
     with client() as c:
         templates = {t["name"]: t["id"] for t in items(check(c.get("/templates")), "templates")}
         body = {"name": name, "templateId": templates[TEMPLATES[kind]["name"]], **PODS[kind]}
-        if kind == "node" and extra:
+        if kind in ("node", "bench") and extra:
             body["gpu"] = {**body["gpu"], "count": int(extra)}
         if kind == "gateway":
             body["mounts"] = {"network": [{"volumeId": extra, "path": "/workspace"}]}

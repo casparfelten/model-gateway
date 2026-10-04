@@ -8,7 +8,7 @@
 #   22    SSH (key from the Runpod account, $PUBLIC_KEY).
 # The gateway finds this pod through the Runpod API (env GATEWAY_POOL) and reads its public IP and port mapping from
 # there; nothing here has to know the gateway.
-# vLLM restarts by itself if it dies. To change flags: edit /workspace/serve.sh over SSH, then
+# vLLM restarts by itself if it dies. To change flags: edit /workspace/node-serve.sh over SSH, then
 # `kill $(cat /workspace/vllm.pid)` (it comes back with the new flags in about 10 s plus load time).
 
 # SSH
@@ -24,7 +24,7 @@ pip install -q huggingface_hub
 [ -f /workspace/models/${M#*/}/config.json ] || hf download $M --local-dir /workspace/models/${M#*/}
 
 # The serve command, editable in place. Same flags as the first node, port 8000.
-[ -f /workspace/serve.sh ] || cat > /workspace/serve.sh <<'EOF'
+[ -f /workspace/node-serve.sh ] || cat > /workspace/node-serve.sh <<'EOF'
 #!/bin/bash
 export PYTHONHASHSEED=0 VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 TP=$(nvidia-smi -L | wc -l)
@@ -43,7 +43,7 @@ EOF
 while true; do
   pkill -9 -f '^VLLM::' 2>/dev/null  # engine/worker processes left by a crash still hold GPU memory
   echo "$(date -Is) starting vLLM" >> /workspace/vllm.log
-  bash /workspace/serve.sh >> /workspace/vllm.log 2>&1 &
+  bash /workspace/node-serve.sh >> /workspace/vllm.log 2>&1 &
   echo $! > /workspace/vllm.pid
   wait $!
   echo "$(date -Is) vLLM exited ($?)" >> /workspace/vllm.log
