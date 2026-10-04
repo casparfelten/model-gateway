@@ -33,7 +33,8 @@ async def runpod_nodes(http: httpx.AsyncClient, pool: str, port: int = 8000) -> 
                 for m in (p.get("runtime") or {}).get("ports") or []:
                     if m.get("private") == port and m.get("type") == "tcp" and m.get("ip") and m.get("public"):
                         urls.append(f"http://{m['ip']}:{m['public']}")
-            cursor = body.get("nextCursor") if isinstance(body, dict) else None
+            page = (body.get("pagination") or {}) if isinstance(body, dict) else {}
+            cursor = page.get("nextCursor") if page.get("hasNextPage", True) else None
             if not cursor:
                 return urls
     except (httpx.HTTPError, ValueError) as ex:

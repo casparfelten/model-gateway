@@ -220,7 +220,8 @@ class Gateway:
         stream = bool(body.get("stream"))
         up = merged(body, b.extra_body)
         up["model"] = b.models[ask.model]
-        headers = {"content-type": "application/json", **b.headers}
+        # identity: the answer is relayed byte for byte, so it must not arrive compressed
+        headers = {"content-type": "application/json", "accept-encoding": "identity", **b.headers}
         if b.kind == "pool":
             headers["x-smg-routing-key"] = ctx["session"]   # SMG's own auth to the nodes is the worker's key
         elif b.api_key:

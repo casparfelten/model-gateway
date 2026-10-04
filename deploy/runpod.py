@@ -22,8 +22,8 @@ API = "https://api.runpod.io/v2"
 ROOT = Path(__file__).resolve().parent.parent
 
 NODE_IMAGE = "vllm/vllm-openai:nightly-ac9126e58aa7bbab1856ba6593ba4d5003fea516"  # the first node's vLLM build
-GATEWAY_IMAGE = os.environ.get("GATEWAY_IMAGE", "412341941636.dkr.ecr.us-east-1.amazonaws.com/model-gateway:20261003-2156")
-GATEWAY_DC = "US-CA-2"   # CPU pods, network volumes, and H200s to put nodes next to it
+GATEWAY_IMAGE = os.environ.get("GATEWAY_IMAGE", "412341941636.dkr.ecr.us-east-1.amazonaws.com/model-gateway:20261004-0139")
+GATEWAY_DC = "US-MO-2"   # has CPU pods and network volumes (US-CA-2 had no CPU capacity)
 
 
 def script_cmd(path: Path) -> dict:
@@ -153,7 +153,7 @@ def pod(kind: str, name: str, extra: str = "") -> None:
         if kind == "gateway":
             body["mounts"] = {"network": [{"volumeId": extra, "path": "/workspace"}]}
         created = check(c.post("/pods", json=body))
-        print(json.dumps({k: created.get(k) for k in ("id", "name", "status", "desiredStatus", "costPerHr")}))
+        print(json.dumps({k: created.get(k) for k in ("id", "name", "status", "desiredStatus", "cost")}))
 
 
 def terminate(pod_id: str) -> None:
