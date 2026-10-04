@@ -1,0 +1,45 @@
+{
+ "config": {
+  "url": "http://127.0.0.1:8000/v1",
+  "key": "sk-arcus-glm-7f3a9c2e5b1d",
+  "model": "Qwen/Qwen3.8-27B",
+  "sessions": 200,
+  "warmup": 60.0,
+  "duration": 240.0,
+  "trace": "/workspace/bench/trace.json",
+  "max_output": 8192,
+  "max_context": 0,
+  "force_length": 1,
+  "extra": "",
+  "timeout": 1800,
+  "seed": 1,
+  "out": "/workspace/results/27b-bf16-tp4-s160_s200.json"
+ },
+ "calls": 1530,
+ "errors": 0,
+ "error_samples": [],
+ "calls_per_min": 333.0,
+ "output_tokens_per_s": 2065.1,
+ "prompt_tokens_per_s": 66470.5,
+ "uncached_prompt_tokens_per_s": 66470.5,
+ "ttft_s": {
+  "p50": 6.194,
+  "p90": 8.694,
+  "p99": 10.683
+ },
+ "decode_tokens_per_s_per_stream": {
+  "p50": 19.314,
+  "p10": 17.342
+ },
+ "call_latency_s": {
+  "p50": 18.491,
+  "p90": 76.949
+ },
+ "prompt_tokens": {
+  "p50": 10418,
+  "p90": 21120
+ },
+ "client_cached_share": 0.0,
+ "server_prefix_hit_rate": 0.872,
+ "server_preemptions": null
+}

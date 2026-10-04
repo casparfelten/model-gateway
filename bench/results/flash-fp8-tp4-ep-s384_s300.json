@@ -1,0 +1,47 @@
+{
+ "config": {
+  "url": "http://127.0.0.1:8000/v1",
+  "key": "sk-arcus-glm-7f3a9c2e5b1d",
+  "model": "Qwen/Qwen3.8-Flash-Next",
+  "sessions": 300,
+  "warmup": 60.0,
+  "duration": 240.0,
+  "trace": "/workspace/bench/trace.json",
+  "max_output": 8192,
+  "max_context": 0,
+  "force_length": 1,
+  "extra": "",
+  "timeout": 1800,
+  "seed": 1,
+  "out": "/workspace/results/flash-fp8-tp4-ep-s384_s300.json"
+ },
+ "calls": 2145,
+ "errors": 1,
+ "error_samples": [
+  "ReadError: "
+ ],
+ "calls_per_min": 462.2,
+ "output_tokens_per_s": 2179.0,
+ "prompt_tokens_per_s": 82528.1,
+ "uncached_prompt_tokens_per_s": 82528.1,
+ "ttft_s": {
+  "p50": 0.479,
+  "p90": 0.666,
+  "p99": 0.939
+ },
+ "decode_tokens_per_s_per_stream": {
+  "p50": 11.678,
+  "p10": 9.264
+ },
+ "call_latency_s": {
+  "p50": 20.612,
+  "p90": 80.266
+ },
+ "prompt_tokens": {
+  "p50": 9375,
+  "p90": 19074
+ },
+ "client_cached_share": 0.0,
+ "server_prefix_hit_rate": 0.828,
+ "server_preemptions": null
+}

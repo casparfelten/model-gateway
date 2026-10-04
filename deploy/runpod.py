@@ -93,8 +93,9 @@ TEMPLATES = {
 }
 
 PODS = {
-    "node": {"gpu": {"id": "NVIDIA H200", "count": 4}, "cloud": "SECURE"},
-    "bench": {"gpu": {"id": "NVIDIA H200", "count": 4}, "cloud": "SECURE"},
+    # the vLLM image needs a CUDA 13 host driver: on an older one multi-GPU communication fails
+    "node": {"gpu": {"id": "NVIDIA H200", "count": 4, "minCudaVersion": "13.0"}, "cloud": "SECURE"},
+    "bench": {"gpu": {"id": "NVIDIA H200", "count": 4, "minCudaVersion": "13.0"}, "cloud": "SECURE"},
     "gateway": {"cpu": {"id": "cpu5c", "vcpuCount": 2}, "cloud": "SECURE", "dataCenterIds": [GATEWAY_DC]},
 }
 

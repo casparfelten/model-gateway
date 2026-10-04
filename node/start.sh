@@ -42,6 +42,7 @@ EOF
 # Run vLLM forever: restart it 10 s after it exits
 while true; do
   pkill -9 -f '^VLLM::' 2>/dev/null  # engine/worker processes left by a crash still hold GPU memory
+  rm -f /dev/shm/vllm_offload_*      # and its CPU copy of the KV cache (~85% of /dev/shm) would leave no room
   echo "$(date -Is) starting vLLM" >> /workspace/vllm.log
   bash /workspace/node-serve.sh >> /workspace/vllm.log 2>&1 &
   echo $! > /workspace/vllm.pid
