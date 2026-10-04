@@ -61,6 +61,9 @@ Some consequences:
 
 **Failures:**
 
+- A backend that answers 404/405 ("no such endpoint") is skipped for that path only; it is not counted as failing.
+- A client that disconnects stops its request's retries.
+
 - A request that fails before its first token (no connection, 5xx, 429, no first token in time) goes to the next
   backend. When all have failed, it waits and retries, up to `routing.max_wait_s` (10 min).
 - A backend that fails 5 times in a row over at least 30 s is skipped for 60 s, then one request tests it.
@@ -104,9 +107,11 @@ Endpoints:
 
 - The key's `/v1/models` is polled every minute, and each model listed becomes a backend.
 - Touchmark's API does not expose contract terms, so they go in `contracts:` in the config, by model id.
-- Tested quirks (handled in `adapters/touchmark.py`):
-  - Its prompt cache only works with a `prompt_cache_key`. Without one: 0 of 23K tokens cached. With one: 22.7K.
-  - Its Responses API writes invalid JSON (`"metadata":{}"background"`) unless the request sets `metadata`.
+- Tested quirks (see `adapters/touchmark.py`):
+  - Chat Completions only. It now answers `/v1/responses` with 404, so the gateway stops asking it for that path for
+    10 minutes, and returns the 404 to the client when no other backend serves the path.
+  - Its prompt cache: with the first key, a `prompt_cache_key` gave 22.7K of 23K tokens cached. With the current key,
+    nothing is ever read back from its cache (0 cached tokens), key or not.
 
 ## Tests
 

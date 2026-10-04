@@ -4,7 +4,7 @@
     python deploy/runpod.py template node|gateway     # create or update the template
     python deploy/runpod.py volume <name> <dc> <GB>   # a network volume (the gateway keeps /workspace on one)
     python deploy/runpod.py pod node <name> [gpus]    # a GPU node (default 4 GPUs)
-    python deploy/runpod.py pod gateway <name> <volume-id>
+    python deploy/runpod.py pod gateway <name> [volume-id]
     python deploy/runpod.py show <pod-id>             # the pod's public IP and port mapping
     python deploy/runpod.py terminate <pod-id>        # delete the pod (a node's own disk goes with it)
 
@@ -22,8 +22,8 @@ API = "https://api.runpod.io/v2"
 ROOT = Path(__file__).resolve().parent.parent
 
 NODE_IMAGE = "vllm/vllm-openai:nightly-ac9126e58aa7bbab1856ba6593ba4d5003fea516"  # the first node's vLLM build
-GATEWAY_IMAGE = os.environ.get("GATEWAY_IMAGE", "412341941636.dkr.ecr.us-east-1.amazonaws.com/model-gateway:20261004-0139")
-GATEWAY_DC = "US-MO-2"   # has CPU pods and network volumes (US-CA-2 had no CPU capacity)
+GATEWAY_IMAGE = os.environ.get("GATEWAY_IMAGE", "412341941636.dkr.ecr.us-east-1.amazonaws.com/model-gateway:20261004-0209")
+GATEWAY_DC = "EU-RO-1"   # on 2026-10-04 only 2-vCPU CPU pods could be placed, here and in EUR-IS-1
 
 
 def script_cmd(path: Path) -> dict:
@@ -95,7 +95,7 @@ TEMPLATES = {
 PODS = {
     "node": {"gpu": {"id": "NVIDIA H200", "count": 4}, "cloud": "SECURE"},
     "bench": {"gpu": {"id": "NVIDIA H200", "count": 4}, "cloud": "SECURE"},
-    "gateway": {"cpu": {"id": "cpu3c", "vcpuCount": 4}, "cloud": "SECURE", "dataCenterIds": [GATEWAY_DC]},
+    "gateway": {"cpu": {"id": "cpu5c", "vcpuCount": 2}, "cloud": "SECURE", "dataCenterIds": [GATEWAY_DC]},
 }
 
 
@@ -150,7 +150,7 @@ def pod(kind: str, name: str, extra: str = "") -> None:
         body = {"name": name, "templateId": templates[TEMPLATES[kind]["name"]], **PODS[kind]}
         if kind in ("node", "bench") and extra:
             body["gpu"] = {**body["gpu"], "count": int(extra)}
-        if kind == "gateway":
+        if kind == "gateway" and extra:   # a network volume keeps the edited config across pod restarts
             body["mounts"] = {"network": [{"volumeId": extra, "path": "/workspace"}]}
         created = check(c.post("/pods", json=body))
         print(json.dumps({k: created.get(k) for k in ("id", "name", "status", "desiredStatus", "cost")}))

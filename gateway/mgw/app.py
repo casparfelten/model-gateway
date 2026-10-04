@@ -194,8 +194,18 @@ class Gateway:
         tried: set[str] = set()
         wait = 1.0
         while True:
-            options = rank(self.backends, self.states, ask, time.time(), self.config.routing, exclude=tried)
+            t = time.time()
+            # backends that answered "no such endpoint" for this path lately are not tried for it
+            lacking = {n for n, st in self.states.items() if st.unsupported.get(path, 0) > t}
+            options = rank(self.backends, self.states, ask, t, self.config.routing, exclude=tried | lacking)
             if not options:
+                # every backend that could take it now lacks this endpoint: answer at once, don't wait
+                able = [o.backend for o in rank(self.backends, self.states, ask, t, self.config.routing)]
+                if lacking and able and all(n in lacking for n in able):
+                    return ctx.get("refusal") or error(404, f"no backend serves {request.url.path} for {model}",
+                                                       "invalid_request_error")
+                if await request.is_disconnected():
+                    return error(499, "client went away")
                 if time.time() > deadline:
                     return error(503, f"no backend took the request in {self.config.routing['max_wait_s']} s")
                 if pinned and pinned not in self.backends:
@@ -206,6 +216,8 @@ class Gateway:
                 tried.clear()   # everything was tried: start over
                 continue
             choice = options[0]
+            if tried and await request.is_disconnected():
+                return error(499, "client went away")
             answer = await self.attempt(self.backends[choice.backend], choice, body, ask, ctx)
             if answer is not None:
                 return answer
@@ -264,7 +276,7 @@ class Gateway:
                 text = (await resp.aread())[:2000]
                 await resp.aclose()
                 release()
-                return self.failed(b, st, resp.status_code, text, resp.headers)
+                return self.failed(b, st, resp.status_code, text, resp.headers, ctx)
             out_headers = {"content-type": resp.headers.get("content-type", "application/json"),
                            "x-gateway-backend": b.name}
             if resp.headers.get("x-request-id"):
@@ -341,9 +353,17 @@ class Gateway:
         async for chunk in rest:
             yield chunk
 
-    def failed(self, b: Backend, st: State, status: int, text: bytes, headers) -> Response | None:
+    def failed(self, b: Backend, st: State, status: int, text: bytes, headers, ctx: dict) -> Response | None:
         now = time.time()
         message = text.decode(errors="replace")
+        if status in (404, 405):
+            # the backend does not offer this endpoint (e.g. Touchmark dropped /v1/responses): not a failure of the
+            # backend; skip it for this path for 10 minutes, and keep its answer for the client if no one else has it
+            st.unsupported[ctx["path"]] = now + 600
+            ctx["refusal"] = Response(text, status_code=status, headers={"content-type": "application/json",
+                                                                         "x-gateway-backend": b.name})
+            log.warning("backend %s does not serve %s: HTTP %s %s", b.name, ctx["path"], status, message[:200])
+            return None
         if status == 429:
             retry = headers.get("retry-after")
             st.record_busy(now, float(retry) if retry and retry.replace(".", "", 1).isdigit() else None)

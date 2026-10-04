@@ -73,6 +73,7 @@ class State:
         self.busy_until = 0.0                   # after a 429: no new requests until then
         self.nodes: dict[str, Node] = {}        # pool only
         self.prefill_tps: float | None = None   # pool only: best per-node prefill speed seen
+        self.unsupported: dict[str, float] = {}  # path -> until when this backend is not asked for it
         self.served = self.failed = 0
         self.last_error = ""
 

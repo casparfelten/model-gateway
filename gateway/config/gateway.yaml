@@ -26,7 +26,8 @@ routing:
   congestion_starts_at: 0.5          # below this fill (0-1), extra work on a backend costs nothing
   switch_margin_dollars: 0.0005      # a session moves only when another backend is cheaper by this much
   switch_margin_fraction: 0.1        # ... or by this fraction of its score, whichever is larger
-  max_wait_s: 600                    # a request that no backend took waits this long before a 503
+  max_wait_s: 600                    # a request that no backend took waits this long before a 503 (clients on
+                                     # Runpod's HTTPS proxy, port 8090, are cut at 100 s; use port 8080 to wait longer)
   session_ttl_s: 7200                # sessions not seen for this long are forgotten
 
 backends:
