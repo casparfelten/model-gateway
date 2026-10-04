@@ -11,6 +11,9 @@ configuration does exactly the same work.
     python bench/loadgen.py --url http://127.0.0.1:8000/v1 --key $VLLM_API_KEY --model Qwen/Qwen3.8-27B \
         --sessions 200 --warmup 120 --duration 600 --out results/run.json
 
+`--url` may list several servers separated by commas (e.g. two TP2 copies on one 4-GPU pod): each session stays on one
+of them (session i uses server i mod n), as a cache-aware router would keep it.
+
 Reported over the measured window: requests and tokens per second, time to first token (TTFT), output speed per
 stream, whole-call latency, the server's prefix-cache hit rate, errors.
 """
@@ -63,7 +66,7 @@ class Stats:
         self.calls.append(c)
 
 
-async def call(client, args, messages, out_tokens, stats, filler, measure):
+async def call(client, args, url, messages, out_tokens, stats, filler, measure):
     body = {"model": args.model, "messages": messages, "max_tokens": max(1, out_tokens), "stream": True,
             "stream_options": {"include_usage": True}, "temperature": 0.7}
     if args.force_length:
@@ -75,7 +78,7 @@ async def call(client, args, messages, out_tokens, stats, filler, measure):
     first = None
     text, usage = [], None
     try:
-        async with client.stream("POST", f"{args.url}/chat/completions", json=body,
+        async with client.stream("POST", f"{url}/chat/completions", json=body,
                                  headers={"Authorization": f"Bearer {args.key}"}, timeout=args.timeout) as r:
             if r.status_code != 200:
                 stats.errors.append(f"HTTP {r.status_code}: {(await r.aread())[:200]!r}")
@@ -108,6 +111,8 @@ async def call(client, args, messages, out_tokens, stats, filler, measure):
 
 
 async def session(client, args, trace, stats, filler, stop_at, measure, sid):
+    urls = args.url.split(",")
+    url = urls[sid % len(urls)]
     while time.time() < stop_at:
         turns = random.choice(trace)
         messages = [{"role": "system", "content": f"[session {sid}-{random.random():.6f}] " + filler.text(turns[0][0])}]
@@ -118,7 +123,7 @@ async def session(client, args, trace, stats, filler, stop_at, measure, sid):
             if i > 0:
                 await asyncio.sleep(gap)
                 messages.append({"role": "user", "content": filler.text(grow)})
-            answer = await call(client, args, messages, min(out, args.max_output), stats, filler, measure)
+            answer = await call(client, args, url, messages, min(out, args.max_output), stats, filler, measure)
             if answer is None:
                 await asyncio.sleep(1)
                 break   # a failed call ends this session; a new one starts
@@ -131,15 +136,17 @@ def pct(a, p):
 
 
 async def server_metrics(client, args) -> dict:
-    try:
-        r = await client.get(args.url.removesuffix("/v1") + "/metrics", headers={"Authorization": f"Bearer {args.key}"},
-                             timeout=10)
-        out = {}
+    """vLLM/SGLang counters, summed over all servers."""
+    out = {}
+    for url in args.url.split(","):
+        try:
+            r = await client.get(url.removesuffix("/v1") + "/metrics", headers={"Authorization": f"Bearer {args.key}"},
+                                 timeout=10)
+        except httpx.HTTPError:
+            continue
         for name, value in re.findall(r"^(vllm:[a-z_]+|sglang:[a-z_]+)(?:\{[^}]*\})? ([0-9.eE+-]+)$", r.text, re.M):
             out[name] = out.get(name, 0.0) + float(value)
-        return out
-    except httpx.HTTPError:
-        return {}
+    return out
 
 
 async def main(args):
